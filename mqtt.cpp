@@ -1,6 +1,5 @@
 #include "mqtt.h"
 #include <SoftwareSerial.h>
-#include <ArduinoJson.h>
 
 
 SoftwareSerial mySerial(10,11);
@@ -17,7 +16,7 @@ void Mqtt::connect(String server,String server1,String port,String s,bool auth=f
    mySerial.println("AT+CIPSHUT\r");
   delay(2000);
   byte co[] = {0x00, 0x04, 0x4d, 0x51, 0x54,
-               0x54, 0x04, 0xc2, 0x00, 0x3c, 0x00};
+               0x54, 0x04, 0xc2, 0x00, 0xb4, 0x00};
   byte pwd[] = {0x00};
 
   int length = s.length()+user.length()+pswd.length()+16;
@@ -152,11 +151,18 @@ void Mqtt::getData(){
   }
 }
 bool Mqtt::available(){
-     while ( Serial.available()>0 ) {
-     char  c = Serial.read();
-    // Serial.print(c);
-      if (( c == '\n') || ( c == '\r')) {    
-          return true;         
+     while ( mySerial.available()>0 ) {
+     char  c = mySerial.read();
+     //Serial.print(c);
+      if (/*( c == 0x0d) ||*/ ( c == 0x0a)) {  
+        if ( lineIndex > 2 ) {    
+          return true; 
+        }else {
+            line[ 0 ] = '\0';              
+            lineIndex = 0;
+         return false;
+        }      
+
           //checkResponse();
         }else if ( c == '}'){
           line[ lineIndex++ ] = c;      
@@ -171,7 +177,7 @@ bool Mqtt::available(){
           else if ( c >= 'a' && c <= 'z' ) {        
             line[ lineIndex++ ] = c-'a'+'A';
           } 
-          else {
+          else if ( (c >= '0' && c <= '9') ||(c >= 'A' && c <= 'Z') || c==':'|| c=='{'|| c==0x22) {
             line[ lineIndex++ ] = c;
           }
         return false; 
@@ -185,30 +191,22 @@ bool Mqtt::available(){
 String Mqtt::readString(){
     if ( lineIndex > 0 ) {                        
         line[ lineIndex ] = '\0';                   
+        lineIndex = 0;
+        String s(line);
+        if(s.indexOf("IOT")>=0){
+          return s.substring(s.indexOf("{"));
+        }else if(s.indexOf("OK")>=0){
+          return "OK";
+        }else if(s.indexOf("CLOSED")>=0 || s.indexOf("ERROR")>=0){
+              //reconnect
+              line[ 0 ] = '\0';
+              return "ERROR";
+        }
+    }else {
+        line[ 0 ] = '\0';                   
+        lineIndex = 0;
     }
-    lineIndex = 0;
-    String s(line);
-    //Serial.println(s);
-    int topicInde = s.indexOf("IOT") ;
-    if(topicInde>0){
-      int msgIndex = s.indexOf("{") ;
-      // Serial.print("Topic :");
-      // Serial.println(s.substring(topicInde,topicInde+22));
-      // Serial.print("Msg :");
-      // Serial.println(s.substring(msgIndex));
-      // DynamicJsonDocument doc(1024);
-      // deserializeJson(doc, s.substring(msgIndex));
-      // Serial.print("Safta :");
-      // Serial.println((char*)doc["SAFTA"]);
-      return s.substring(msgIndex);
-    }else{
-      if(s.indexOf("CLOSED")>=0 || s.indexOf("ERROR")>=0){
-          //reconnect
-
-          return "ERROR";
-      }
-    }
-  return s;
+  return "";
 }
 
 
