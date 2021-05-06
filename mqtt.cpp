@@ -1,28 +1,65 @@
 #include "mqtt.h"
 #include <SoftwareSerial.h>
 
+bool ping = false;
+int count = 0;
 
-SoftwareSerial mySerial(10,11);
+bool pub = false;
+int count2 = 0;
+//oftwareSerial mySerial(10,11);
+SoftwareSerial mySerial(14, 12);
 Mqtt::Mqtt(bool displayMsg) {
 
 }
 
 void Mqtt::begin(int baudRate) {
   mySerial.begin(baudRate);
-  Serial.begin(baudRate);
-  //initAt();
+  Serial.begin(baudRate);  
+
+  Serial.println("ok");
+ initAt();  /*
+  cli();                     
+  TCCR1A = 0;               
+  TCCR1B = 0;                
+  TCCR1B |= B00000101;  
+  TIMSK1 |= B00000010;       
+  OCR1A = 15624;            
+  sei();   */
 }
-void Mqtt::connect(String server,String server1,String port,String s,bool auth=false,String user="",String pswd="") {
+/*
+ISR(TIMER1_COMPA_vect){
+  TCNT1  = 0; 
+  count++;
+    count2++;
+  if(count >= 50){
+    ping = true;
+    count = 0;
+  }
+  if(count2 >=70){
+    pub = true;
+    count2 = 0;
+  }
+}*/
+
+void Mqtt::connect(String server,String server1,String port,String s,bool auth,String user,String pswd) {
+    serverr =server;
+    portt =port;
+    clientId = s;
+    withauth = auth;
+    userr = user;
+    pwdd = pswd;
+
    mySerial.println("AT+CIPSHUT\r");
   delay(2000);
   byte co[] = {0x00, 0x04, 0x4d, 0x51, 0x54,
-               0x54, 0x04, 0xc2, 0x00, 0xb4, 0x00};
+               0x54, 0x04, 0xc2, 0x00, 0x3c, 0x00};
   byte pwd[] = {0x00};
 
   int length = s.length()+user.length()+pswd.length()+16;
   if(!auth){
     co[7] = 0x02;
-    length -4;
+    length-= 4;
+
   }
   mySerial.print("AT+CIPSTART=\"TCP\",\"");
   delay(1000);
@@ -76,8 +113,8 @@ void Mqtt::connect(String server,String server1,String port,String s,bool auth=f
 void Mqtt::publish(String topic,  String msg) {
   int length = 5 + topic.length() + msg.length();
   byte pu[] = {0x00};
-  mySerial.print("AT+CIPSEND");
-  // mySerial.print(length);
+  mySerial.print("AT+CIPSEND=");
+  mySerial.print(length-1);
   mySerial.print("\r");
   delay(3000);
    rr();
@@ -90,10 +127,11 @@ void Mqtt::publish(String topic,  String msg) {
   delay(1000);
    rr();
   mySerial.write(0x1a);
-  delay(3000);
+  delay(1000);
    rr();
 }
 void Mqtt::subscribe(String topic) {
+  topicc =topic;
   int length = 7 + topic.length();
   byte su[] = {0x9b, 0x9c, 0x00};
   byte s[] = {0x00};
@@ -111,31 +149,35 @@ void Mqtt::subscribe(String topic) {
   mySerial.write(0X1a);
   delay(3000);
    rr();
+   connected = true;
 }
 void Mqtt::initAt() {
   mySerial.println("AT+SAPBR=3,1,\"Contype\",\"GPRS\"\r");
-  delay(2000);
+
+  delay(1000);
    rr();
   mySerial.println("AT+CIPSHUT\r");
-  delay(2000);
+
+  delay(1000);
    rr();
   mySerial.println("AT+CIPSTATUS\r");
-  delay(2000);
+  delay(1000);
    rr();
   mySerial.println("AT+CIPMUX=0\r");
-  delay(2000);
+  delay(1000);
    rr();
   mySerial.println("AT+CSTT=\"internet.ooredoo.tn\"\r");
-  delay(2000);
+  delay(1000);
    rr();
   mySerial.println("AT+CIICR\r");
   delay(5000);
    rr();
   mySerial.println("AT+CIFSR\r");
-  delay(5000);
+  delay(1000);
    rr();
   mySerial.println("AT+CIPSPRT=0\r");
-  delay(2000);
+  delay(1000);
+   rr();
 }
 void Mqtt::rr() {
   while (mySerial.available() >= 1) {
@@ -143,14 +185,40 @@ void Mqtt::rr() {
   }
 }
 void Mqtt::getData(){
-  if (mySerial.available()) {
-    Serial.write(mySerial.read());
+ while (true) {
+      if (available()) {
+         line[ lineIndex ] = '\0';                   
+        lineIndex = 0;
+        String s(line);
+        Serial.println(line);
+        if(s.indexOf("ok")>=0|| s.indexOf("ERROR")>=0|| s.indexOf("FAIL")>=0){
+          break;
+        }
+      }
   }
-  if (Serial.available()) {
-    mySerial.write(Serial.read());
+}
+void Mqtt::sendPing(){
+
+  if(connected){
+  byte co[] = {0xc0,0x00,0x1a};
+  mySerial.print("AT+CIPSEND\r");
+  delay(2000);
+  mySerial.write(co,3);
+  Serial.println("ping");
   }
 }
 bool Mqtt::available(){
+    if(ping){
+      ping = false;
+      sendPing();
+      count = 0;
+    }
+
+        if(pub){
+      pub = false;
+      publish("iot-2/4561", "{\"action\":\"D\",\"pin\":13,\"value\":1,\"options\":50}");
+      count2 = 0;
+    }
      while ( mySerial.available()>0 ) {
      char  c = mySerial.read();
      //Serial.print(c);
@@ -177,7 +245,7 @@ bool Mqtt::available(){
           else if ( c >= 'a' && c <= 'z' ) {        
             line[ lineIndex++ ] = c-'a'+'A';
           } 
-          else if ( (c >= '0' && c <= '9') ||(c >= 'A' && c <= 'Z') || c==':'|| c=='{'|| c==0x22) {
+          else if ( (c >= '0' && c <= '9') ||(c >= 'A' && c <= 'Z') || c==':'|| c=='{'|| c==0x22|| c==',') {
             line[ lineIndex++ ] = c;
           }
         return false; 
@@ -197,8 +265,12 @@ String Mqtt::readString(){
           return s.substring(s.indexOf("{"));
         }else if(s.indexOf("OK")>=0){
           return "OK";
-        }else if(s.indexOf("CLOSED")>=0 || s.indexOf("ERROR")>=0){
+        }else if(s.indexOf("CLOSED")>=0 || s.indexOf("ERROR")>=0|| s.indexOf("FAIL")>=0){
               //reconnect
+                 connected = false;
+              connect(serverr, "ernetofthings.ibmcloud.com",portt,clientId,withauth,userr,pwdd);
+              delay(2000);
+              subscribe(topicc);
               line[ 0 ] = '\0';
               return "ERROR";
         }

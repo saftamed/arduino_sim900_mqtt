@@ -19,10 +19,21 @@ public:
   bool available();
   String readString();
 
+
 private:
   void initAt();
   void rr();
   char line[LINE_BUFFER_LENGTH];
   int lineIndex = 0;
+  String serverr;
+  String userr ="";
+  String pwdd ="";
+  String portt ="1883";
+  String clientId ="";
+  bool withauth = false;
+  String topicc="";
+  void sendPing();
+  bool connected =false;
+ 
 };
 #endif

@@ -1,29 +1,52 @@
 #include "mqtt.h"
-#include <ArduinoJson.h>
-
+#include <Arduino_JSON.h>
 Mqtt mqtt(false);
 
 void setup() {
-  mqtt.begin(4800);
-  mqtt.connect("3mda17.messaging.int", "ernetofthings.ibmcloud.com", "1883",
-               "d:3mda17:c:sim", true, "use-token-auth", "g+fjh-hUsMx8lqw!2i");
+  mqtt.begin(9600);
+  mqtt.connect("8.tcp.ngrok.", "io", "18642",
+               "cc",false/*, true, "use-token-auth", "g+fjh-hUsMx8lqw!2i"*/);
   delay(6000);
-  //  mqtt.publish("iot-2/evt/send/fmt/json", "{\"d\":{\"led\":5}}");
-//  delay(4000);
-  mqtt.subscribe("iot-2/cmd/led/fmt/json");
+  mqtt.subscribe("iot-2/4561");
+  delay(4000);
+   mqtt.publish("iot-2/4561", "{\"action\":\"D\",\"pin\":13,\"value\":1,\"options\":50}");
+Serial.println("");
 }
 
 void loop() {
-  if (mqtt.available()) {00
+  if (mqtt.available()) {
     String line = mqtt.readString();
     if (line == "ERROR") {
       Serial.println(line);
     } else {
-      DynamicJsonDocument doc(256);
-      deserializeJson(doc, line);
       Serial.println(line);
-      Serial.print("Safta :");
-      Serial.println((char *)doc["SAFTA"]);
+     setActions(line);
     }
   }
 }
+/*
+
+{
+  "action":"D",
+  "pin":12,
+  "value":1,
+  "options":50
+}
+
+*/
+void setActions(String line){
+   JSONVar myObject = JSON.parse(line);
+             if (JSON.typeof(myObject) == "undefined") {
+        Serial.println("Parsing input failed!");
+        return;
+      }
+
+
+      if((String)((const char*)myObject["ACTION"])=="D"){
+        pinMode((int)myObject["PIN"],OUTPUT);
+        digitalWrite((int)myObject["PIN"],(int)myObject["VALUE"]);
+      }
+}
+
+
+
